@@ -1,11 +1,12 @@
 <script lang="ts" setup>
-import HelloWorld from '@/components/HelloWorld.vue';
+import HelloWorld from "@/components/HelloWorld.vue";
 </script>
 
 <template>
   <v-app>
     <v-container>
       <v-btn variant="outlined" color="teal-lighten-2">Click me</v-btn>
+      <p class="text-3xl font-bold underline text-blue-200">Hello world!</p>
     </v-container>
   </v-app>
 </template>
