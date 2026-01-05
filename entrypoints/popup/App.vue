@@ -1,12 +1,29 @@
 <script lang="ts" setup>
 import HelloWorld from "@/components/HelloWorld.vue";
+import { ref, onMounted } from "vue";
+
+const currentTab = ref<Browser.tabs.Tab | null>(null);
+
+const getCurrentTab = async () => {
+  const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+  currentTab.value = tab;
+};
+
+onMounted(() => {
+  getCurrentTab();
+});
 </script>
 
 <template>
   <v-app>
     <v-container>
-      <v-btn variant="outlined" color="teal-lighten-2">Click me</v-btn>
-      <p class="text-3xl font-bold underline text-blue-200">Hello world!</p>
+      <v-btn variant="outlined" color="teal-lighten-2" @click="getCurrentTab">Get Current Tab</v-btn>
+      <div v-if="currentTab" class="mt-4">
+        <p class="text-sm font-semibold">Current Tab Info:</p>
+        <p class="text-xs">Title: {{ currentTab.title }}</p>
+        <p class="text-xs">URL: {{ currentTab.url }}</p>
+        <p class="text-xs">ID: {{ currentTab.id }}</p>
+      </div>
     </v-container>
   </v-app>
 </template>
