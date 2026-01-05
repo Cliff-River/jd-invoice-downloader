@@ -5,18 +5,7 @@ import HelloWorld from '@/components/HelloWorld.vue';
 <template>
   <v-app>
     <v-container>
-      <div class="logo-container">
-        <a href="https://wxt.dev" target="_blank">
-          <img src="/wxt.svg" class="logo" alt="WXT logo" />
-        </a>
-        <a href="https://vuetifyjs.com/" target="_blank">
-          <img src="https://vuetifyjs.com/apple-touch-icon.png" class="logo vuetify" alt="Vuetify logo" />
-        </a>
-        <a href="https://vuejs.org/" target="_blank">
-          <img src="@/assets/vue.svg" class="logo vue" alt="Vue logo" />
-        </a>
-      </div>
-      <HelloWorld msg="WXT + Vue + Vuetify" />
+      <v-btn variant="outlined" color="teal-lighten-2">Click me</v-btn>
     </v-container>
   </v-app>
 </template>
