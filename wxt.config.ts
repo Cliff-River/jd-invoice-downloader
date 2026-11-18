@@ -8,7 +8,7 @@ export default defineConfig({
     name: "JD orders helper",
     description: "A Chrome extension to help you manage your JD orders.",
     version: "1.0.0",
-    // host_permissions: ["https://*.jd.com/*"],
+    host_permissions: ["*://*.jd.com/*"],
   },
 
   vite: () => ({

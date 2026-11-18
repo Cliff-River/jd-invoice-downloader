@@ -1,6 +1,6 @@
 {
-  "name": "wxt-vue-starter",
-  "description": "manifest.json description",
+  "name": "jd-invoice-downloader",
+  "description": "京东订单助手 - 一键收集京东近一个月订单信息的浏览器扩展",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -21,6 +21,7 @@
     "vuetify": "^3.11.6"
   },
   "devDependencies": {
+    "@types/webextension-polyfill": "^0.12.6",
     "@wxt-dev/module-vue": "^1.0.3",
     "typescript": "^5.9.3",
     "vue-tsc": "^3.1.8",
