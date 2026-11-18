@@ -1,3 +1,7 @@
+---
+alwaysApply: false
+description: 
+---
 # 扩展架构与消息流转
 
 ## 总体架构
