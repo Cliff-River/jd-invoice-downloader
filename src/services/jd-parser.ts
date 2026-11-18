@@ -3,16 +3,17 @@ import { OrderInfo } from '../types/order';
 /**
  * 京东订单列表页 DOM 解析器
  *
- * 京东订单页 `order.jd.com/center/list.action` 的结构特征（2026-11）：
- * - 每个订单卡片外层: `.order-item` 或 `.order-tb` 包裹
- * - 订单号: `.order-tb .order-no` 内的按钮/文本节点，形如 `订单号 3678419000663507`
- * - 商品标题: `.p-name a` 的文本内容
- * - 金额: `.order-total .total-price` 或类似的价格区域
- * - 状态: `.order-tb .order-status` 中的状态文字
- * - 日期: 订单卡片上方的日期分隔 `.time-row` 或 `.order-item .order-time`
+ * 京东订单页 `order.jd.com/center/list.action` 的结构特征（2026-11 实测）：
+ * 页面是 React + CSS Modules，类名带构建 hash（如 `orderCard-b731ca`），
+ * 因此只能按前缀匹配，不能写死完整类名：
+ * - 订单卡片: `[class*="orderCard"]`
+ * - 日期: `[class*="orderTime"]`，形如 `2026-11-10 22:12:51`
+ * - 订单号: `[class*="metaLabel"]` 文本为"订单号"的那个标签的下一个兄弟节点
+ * - 商品: `a[href*="item.jd.com"]` 的 title 属性
+ * - 金额: `[class*="priceSymbol"]`(¥) 与 `priceInteger` / `priceDecimal` 同级，取父节点文本
+ * - 状态: `[class*="statusText"]`
  *
- * 由于京东可能调整 DOM，本模块对外暴露 `parseOrders`，内部
- * 通过多个选择器策略尝试解析，任何一步失败都降级为空数组 + 日志。
+ * 同时保留旧版表格结构（`.order-item` / `.order-tb`）作为兜底。
  */
 
 /** 尝试多种选择器获取文本（支持 Document 或 Element 作为查询上下文） */
@@ -50,15 +51,73 @@ export function isWithinDays(orderDate: string | Date, days = 30): boolean {
 }
 
 /**
+ * 取订单号：优先找「订单号」标签的相邻节点，失败再用正则扫卡片文本
+ */
+function pickOrderNo(card: Element): string {
+  const labels = Array.from(card.querySelectorAll('[class*="metaLabel"]'));
+  const label = labels.find((el) => el.textContent?.trim() === '订单号');
+  const fromSibling = label?.nextElementSibling?.textContent?.trim() || '';
+  if (fromSibling) return extractOrderNo(fromSibling);
+
+  const m = (card.textContent || '').match(/订单号\s*(\d{8,})/);
+  return m ? m[1] : '';
+}
+
+/**
+ * 取订单金额：¥ 符号、整数、小数是三个同级 span，取父节点拼出的 "¥21.01"
+ */
+function pickAmount(card: Element): string {
+  const symbol = card.querySelector('[class*="priceSymbol"]');
+  const raw = symbol?.parentElement?.textContent?.trim() || '';
+  const m = raw.match(/[\d.]+/);
+  return m ? m[0] : '';
+}
+
+/**
  * 从当前订单页 document 中解析订单列表
  * @param doc - 当前页面的 document 对象（content script 上下文直接传 document）
  * @param days - 只保留近 days 天内的订单，默认 30
  */
 export function parseOrders(doc: Document, days = 30): OrderInfo[] {
   const orders: OrderInfo[] = [];
+  const seen = new Set<string>();
 
-  // 策略 1: 新版订单卡片 .order-item
-  // 策略 2: 旧版表格行 .order-tb tr
+  /** 按订单号去重后写入（同一订单可能被分拆成多个卡片） */
+  const push = (order: OrderInfo) => {
+    if (!order.orderNo || seen.has(order.orderNo)) return;
+    seen.add(order.orderNo);
+    orders.push(order);
+  };
+
+  // 策略 1（主）: 2024+ 新版订单卡片
+  doc.querySelectorAll('[class*="orderCard"]').forEach((card) => {
+    try {
+      const orderNo = pickOrderNo(card);
+      if (!orderNo) return;
+
+      const orderDate = pickText(card, ['[class*="orderTime"]', '[class*="orderTimeValue"]']);
+      if (!isWithinDays(orderDate, days)) return;
+
+      const products = Array.from(card.querySelectorAll('a[href*="item.jd.com"]'))
+        .map((a) => a.getAttribute('title')?.trim() || a.textContent?.trim() || '')
+        .filter(Boolean);
+
+      push({
+        orderNo,
+        product: products.join(' | ') || '(无法识别商品)',
+        amount: pickAmount(card) || '-',
+        status: pickText(card, ['[class*="statusText"]', '[class*="status-"]']) || '-',
+        orderDate,
+        rawDate: orderDate,
+      });
+    } catch (err) {
+      console.warn('[jd-parser] 解析单个订单失败', err);
+    }
+  });
+
+  if (orders.length > 0) return orders;
+
+  // 策略 2（兜底）: 旧版表格行 .order-item / .order-tb
   const rows = doc.querySelectorAll('.order-item, .order-tb, .tb-tbody .order-row, [class*="order-item"]');
 
   rows.forEach((row) => {
@@ -157,25 +216,51 @@ export function parseOrders(doc: Document, days = 30): OrderInfo[] {
 /** 检测当前页面是否被重定向到登录页（说明登录失效） */
 export function isRedirectedToLogin(doc: Document): boolean {
   const url = doc.location?.href || '';
-  return (
-    url.includes('passport.jd.com') ||
-    url.includes('uc.jd.com') ||
-    doc.querySelector('.login-form, .login-btn, [id*="login"]') !== null
-  );
+
+  // 1. 被重定向到登录域，最可靠
+  if (url.includes('passport.jd.com') || url.includes('uc.jd.com')) return true;
+
+  // 2. 当前页面自身渲染了登录表单
+  // 注意：不能用 [id*="login"]，京东全站顶栏都有 #ttbar-login-2024、
+  // #login-sdk-root、#guide-login-bar 等 id，会让任何页面都被误判为登录过期
+  return doc.querySelector('#loginname, #nloginpwd, #loginsubmit, .login-form') !== null;
 }
 
-/** 检测当前 tab 京东登录态 - 通过页面上是否有用户头像/昵称 */
+/** 读取 document.cookie 中指定名称的 cookie 值（取不到返回空串） */
+function readCookie(doc: Document, name: string): string {
+  const m = doc.cookie?.match(new RegExp(`(?:^|;\\s*)${name}=([^;]*)`));
+  return m ? decodeURIComponent(m[1]).trim() : '';
+}
+
+/**
+ * 检测当前 tab 京东登录态
+ *
+ * 京东 2024 版顶栏（`#ttbar-login-2024`）由前端异步渲染：
+ * - 已登录 → `<a class="nickname" href="//home.jd.com/">昵称</a>`
+ * - 未登录 → `你好，请登录`(.link-login) / `免费注册`(.link-regist)
+ * 顶栏渲染前 DOM 是空的，因此再用登录后必然写入的 `pin` cookie 兜底。
+ */
 export function checkJdLogin(doc: Document): boolean {
+  // 1. 明确未登录：顶栏出现登录/注册入口
+  if (doc.querySelector('#ttbar-login-2024 .link-login, .link-regist')) {
+    return false;
+  }
+
+  // 2. 明确已登录：新版顶栏昵称，仍保留部分老页面/子站的选择器
   const loggedInIndicators = [
+    '#ttbar-login-2024 .nickname',
+    '.shortcut_userico .nickname',
+    'a.nickname[href*="home.jd.com"]',
     '.user-info .name',
     '.header-user-info .name',
     '[class*="user-info"] .nickname',
     '.jd-header .user',
     '.user-icon',
-    '.myjd',
   ];
   for (const sel of loggedInIndicators) {
     if (doc.querySelector(sel)) return true;
   }
-  return false;
+
+  // 3. 兜底：京东顶栏组件自己也是靠 pin cookie 判断登录身份的
+  return readCookie(doc, 'pin') !== '';
 }

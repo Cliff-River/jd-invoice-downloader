@@ -61,9 +61,13 @@ export default defineBackground(() => {
    * 检查京东登录态
    */
   async function handleCheckLogin(): Promise<MessagePayload> {
-    const tab = await getActiveTab();
+    const tab = await findJdTab();
     if (!tab || !tab.id) {
-      return { type: 'error', code: ERROR_CODES.UNKNOWN, message: '无法获取当前活动标签' };
+      return {
+        type: 'error',
+        code: ERROR_CODES.CONTENT_SCRIPT_NOT_INJECTED,
+        message: '未找到京东页面，请先打开 jd.com 任一页面后再试',
+      };
     }
 
     try {
@@ -71,9 +75,28 @@ export default defineBackground(() => {
       const loggedIn = (resp as { loggedIn?: boolean })?.loggedIn === true;
       return { type: 'loginStatus', loggedIn };
     } catch (err) {
+      // content script 未注入（页面在扩展安装前就已打开 / 未刷新），与"未登录"区分开
       console.warn('[background] checkLogin 失败', err);
-      return { type: 'loginStatus', loggedIn: false };
+      return {
+        type: 'error',
+        code: ERROR_CODES.CONTENT_SCRIPT_NOT_INJECTED,
+        message: '京东页面上的脚本尚未就绪，请刷新该京东页面后重试',
+      };
     }
+  }
+
+  /**
+   * 找到可用于检测登录态的京东标签页
+   * 优先当前活动标签，其次任意已打开的京东标签（活动标签可能不是京东页面）
+   */
+  async function findJdTab(): Promise<TabRef | null> {
+    const active = await getActiveTab();
+    if (active?.id && active.url?.includes('jd.com')) {
+      return active;
+    }
+
+    const jdTabs = await browser.tabs.query({ url: ['*://*.jd.com/*'] });
+    return jdTabs?.[0] ?? null;
   }
 
   /**

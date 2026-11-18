@@ -26,6 +26,10 @@ async function checkLogin() {
     const resp = (await browser.runtime.sendMessage({ type: 'checkLogin' } as MessagePayload)) as MessagePayload;
     if (resp?.type === 'loginStatus') {
       loggedIn.value = (resp as { loggedIn: boolean }).loggedIn;
+    } else if (resp?.type === 'error') {
+      // 区分"检测不到京东页面"和"确实未登录"，避免误导
+      loggedIn.value = false;
+      errorMsg.value = (resp as { message: string }).message || '无法检测登录状态';
     } else {
       loggedIn.value = false;
     }
@@ -73,7 +77,7 @@ async function collectOrders() {
       <!-- 标题栏 -->
       <div class="d-flex align-center mb-4">
         <v-icon color="primary" size="28">mdi-cart-outline</v-icon>
-        <h2 class="text-h6 font-weight-bold ml-2 flex-grow-1">京东订单助手</h2>
+        <h2 class="text-h6 font-weight-bold ml-2 grow">京东订单助手</h2>
         <v-btn size="small" variant="text" @click="checkLogin">
           <v-icon size="18">mdi-refresh</v-icon>
         </v-btn>
