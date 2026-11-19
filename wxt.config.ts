@@ -1,5 +1,6 @@
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'wxt';
+import ViteFonts from 'unplugin-fonts/vite'
 
 // See https://wxt.dev/api/config.html
 export default defineConfig({
@@ -12,6 +13,19 @@ export default defineConfig({
   },
 
   vite: () => ({
-    plugins: [tailwindcss()],
+    plugins: [
+      tailwindcss(),
+      ViteFonts({
+      fontsource: {
+        families: [
+          {
+            name: 'Roboto',
+            weights: [100, 300, 400, 500, 700, 900],
+            styles: ['normal', 'italic'],
+          },
+        ],
+      },
+    }),
+    ],
   }),
 });

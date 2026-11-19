@@ -5,6 +5,7 @@ import * as directives from 'vuetify/directives';
 import 'vuetify/styles';
 import './style.css';
 import App from './App.vue';
+import 'unfonts.css'
 
 const vuetify = createVuetify({
   components,
