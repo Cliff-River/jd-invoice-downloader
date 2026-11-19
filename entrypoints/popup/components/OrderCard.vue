@@ -22,7 +22,7 @@ const amountText = computed(() =>
 </script>
 
 <template>
-  <v-card variant="flat" rounded="lg" class="order-card mb-2">
+  <v-card variant="flat" rounded="lg" class="order-card mb-2 py-1">
     <div class="px-3 py-2.5">
       <!-- 第一行：订单号 + 订单状态 -->
       <div class="mb-1 flex items-start justify-between gap-2">
