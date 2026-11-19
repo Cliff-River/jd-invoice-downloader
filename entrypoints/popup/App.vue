@@ -1,46 +1,59 @@
 <script lang="ts" setup>
-import { onMounted, ref, computed } from 'vue';
-import { OrderInfo, MessagePayload } from '@/src/types/order';
+import { computed, onMounted, ref } from 'vue';
+import { ERROR_CODES, type MessagePayload, type OrderInfo } from '@/src/types/order';
+import PopupHeader from './components/PopupHeader.vue';
+import LoginAlert from './components/LoginAlert.vue';
+import EmptyState from './components/EmptyState.vue';
+import OrderList from './components/OrderList.vue';
 
-/** 登录状态 */
-const loggedIn = ref<boolean | null>(null); // null = 检测中, true/false = 已判定
-/** 采集状态 */
+/** 登录态：检测中 / 已登录 / 未登录 */
+type LoginStatus = 'checking' | 'loggedIn' | 'loggedOut';
+
+/** 当前登录态 */
+const loginStatus = ref<LoginStatus>('checking');
+/** 登录检测失败的原因（展示在登录提示内） */
+const loginMessage = ref('');
+/** 是否正在采集订单 */
 const loading = ref(false);
 /** 采集到的订单 */
 const orders = ref<OrderInfo[]>([]);
-/** 错误提示 */
+/** 采集过程中的错误提示 */
 const errorMsg = ref('');
 
-/** 点击按钮是否禁用 */
-const buttonDisabled = computed(() => loading.value || loggedIn.value !== true);
+/** 主按钮是否禁用：未登录或采集中都不可点击 */
+const buttonDisabled = computed(() => loading.value || loginStatus.value !== 'loggedIn');
 
-onMounted(async () => {
-  await checkLogin();
+onMounted(() => {
+  void checkLogin();
 });
 
 /** 查询登录态 */
 async function checkLogin() {
-  loggedIn.value = null;
-  errorMsg.value = '';
+  loginStatus.value = 'checking';
+  loginMessage.value = '';
+
   try {
-    const resp = (await browser.runtime.sendMessage({ type: 'checkLogin' } as MessagePayload)) as MessagePayload;
+    const resp = (await browser.runtime.sendMessage({
+      type: 'checkLogin',
+    } as MessagePayload)) as MessagePayload;
+
     if (resp?.type === 'loginStatus') {
-      loggedIn.value = (resp as { loggedIn: boolean }).loggedIn;
+      loginStatus.value = resp.loggedIn ? 'loggedIn' : 'loggedOut';
     } else if (resp?.type === 'error') {
-      // 区分"检测不到京东页面"和"确实未登录"，避免误导
-      loggedIn.value = false;
-      errorMsg.value = (resp as { message: string }).message || '无法检测登录状态';
+      // 区分「检测不到京东页面」和「确实未登录」，避免误导
+      loginStatus.value = 'loggedOut';
+      loginMessage.value = resp.message || '无法检测登录状态';
     } else {
-      loggedIn.value = false;
+      loginStatus.value = 'loggedOut';
     }
   } catch (err) {
     console.warn('[popup] checkLogin 失败', err);
-    loggedIn.value = false;
-    errorMsg.value = '无法检测登录状态，请确认浏览器网络连接正常';
+    loginStatus.value = 'loggedOut';
+    loginMessage.value = '无法检测登录状态，请确认浏览器网络连接正常';
   }
 }
 
-/** 点击"收集订单"主按钮 */
+/** 采集近 30 天订单 */
 async function collectOrders() {
   loading.value = true;
   errorMsg.value = '';
@@ -53,11 +66,14 @@ async function collectOrders() {
     } as MessagePayload)) as MessagePayload;
 
     if (resp?.type === 'ordersResult') {
-      orders.value = (resp as { orders: OrderInfo[] }).orders;
+      orders.value = resp.orders;
     } else if (resp?.type === 'error') {
-      errorMsg.value = (resp as { message: string }).message || '采集失败';
-      if ((resp as { code?: string }).code === 'LOGIN_EXPIRED') {
-        loggedIn.value = false;
+      if (resp.code === ERROR_CODES.LOGIN_EXPIRED) {
+        // 登录过期属于登录态问题，回到未登录提示，而不是展示普通错误
+        loginStatus.value = 'loggedOut';
+        loginMessage.value = resp.message || '登录已过期，请重新登录京东';
+      } else {
+        errorMsg.value = resp.message || '采集失败';
       }
     } else {
       errorMsg.value = '未收到有效响应';
@@ -72,131 +88,50 @@ async function collectOrders() {
 </script>
 
 <template>
-  <v-app class="jd-popup">
-    <v-container class="pa-4" style="min-width: 380px">
-      <!-- 标题栏 -->
-      <div class="d-flex align-center mb-4">
-        <v-icon color="primary" size="28">mdi-cart-outline</v-icon>
-        <h2 class="text-h6 font-weight-bold ml-2 grow">京东订单助手</h2>
-        <v-btn size="small" variant="text" @click="checkLogin">
-          <v-icon size="18">mdi-refresh</v-icon>
-        </v-btn>
-      </div>
+  <v-app class="h-full">
+    <div class="flex h-full flex-col">
+      <PopupHeader
+        :refreshing="loginStatus === 'checking'"
+        @refresh="checkLogin"
+      />
 
-      <!-- 登录状态区 -->
-      <v-alert
-        v-if="loggedIn === null"
-        type="info"
-        variant="tonal"
-        density="compact"
-        class="mb-3"
-      >
-        正在检测京东登录态...
-      </v-alert>
+      <!-- 内容区：固定高度内滚动，避免整个 Popup 被内容撑高 -->
+      <main class="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-3 py-3">
+        <LoginAlert :status="loginStatus" :message="loginMessage" />
 
-      <v-alert
-        v-else-if="loggedIn === false"
-        type="warning"
-        variant="tonal"
-        density="compact"
-        class="mb-3"
-      >
-        未检测到京东登录态，请先登录 <a href="https://www.jd.com" target="_blank" class="text-decoration-underline">京东</a> 后再试
-      </v-alert>
-
-      <v-alert
-        v-else
-        type="success"
-        variant="tonal"
-        density="compact"
-        class="mb-3"
-      >
-        已登录京东，可以开始收集订单 ✓
-      </v-alert>
-
-      <!-- 主按钮 -->
-      <v-btn
-        block
-        color="primary"
-        size="large"
-        :disabled="buttonDisabled"
-        :loading="loading"
-        @click="collectOrders"
-        class="mb-4"
-      >
-        <template v-if="loading">采集中...</template>
-        <template v-else>收集近一个月订单</template>
-      </v-btn>
-
-      <!-- 错误提示区 -->
-      <v-alert
-        v-if="errorMsg"
-        type="error"
-        variant="tonal"
-        density="compact"
-        class="mb-3"
-      >
-        {{ errorMsg }}
-      </v-alert>
-
-      <!-- Loading 中 -->
-      <div v-if="loading" class="text-center py-4">
-        <v-progress-circular indeterminate color="primary" size="32" />
-        <div class="text-caption text-medium-emphasis mt-2">正在访问京东订单页，请稍候...</div>
-      </div>
-
-      <!-- 空状态 -->
-      <div v-else-if="orders.length === 0 && !errorMsg && loggedIn === true" class="text-center py-6">
-        <v-icon size="48" color="grey-lighten-2">mdi-file-document-outline</v-icon>
-        <div class="text-body-2 text-medium-emphasis mt-2">点击上方按钮开始采集近 30 天订单</div>
-      </div>
-
-      <!-- 结果列表 -->
-      <div v-else-if="orders.length > 0" class="orders-list">
-        <div class="d-flex justify-space-between align-center mb-2">
-          <span class="text-subtitle-2 font-weight-bold">共 {{ orders.length }} 条订单</span>
-          <span class="text-caption text-medium-emphasis">近 30 天</span>
-        </div>
-
-        <v-card
-          v-for="order in orders"
-          :key="order.orderNo"
-          variant="outlined"
-          class="mb-2 order-card"
-          density="compact"
+        <v-btn
+          block
+          color="primary"
+          size="large"
+          rounded="lg"
+          class="mb-3"
+          :disabled="buttonDisabled"
+          :loading="loading"
+          @click="collectOrders"
         >
-          <v-card-text class="pa-3">
-            <div class="d-flex justify-space-between align-start mb-1">
-              <span class="text-caption text-medium-emphasis">订单号 {{ order.orderNo }}</span>
-              <v-chip
-                size="x-small"
-                :color="order.status.includes('完成') || order.status.includes('送达') ? 'success' : order.status.includes('取消') ? 'grey' : 'warning'"
-                variant="tonal"
-              >
-                {{ order.status }}
-              </v-chip>
-            </div>
-            <div class="text-body-2 text-truncate font-weight-medium mb-1" :title="order.product">
-              {{ order.product }}
-            </div>
-            <div class="d-flex justify-space-between align-center">
-              <span class="text-caption text-medium-emphasis">{{ order.orderDate }}</span>
-              <span class="text-subtitle-2 font-weight-bold text-primary">¥ {{ order.amount }}</span>
-            </div>
-          </v-card-text>
-        </v-card>
-      </div>
+          {{ loading ? '采集中...' : '收集近一个月订单' }}
+        </v-btn>
 
-      <!-- 底部提示 -->
-      <div class="text-center text-caption text-disabled mt-4 pt-2 border-top">
+        <v-alert
+          v-if="errorMsg"
+          type="error"
+          variant="tonal"
+          density="compact"
+          :icon="false"
+          class="mb-3 text-xs"
+        >
+          {{ errorMsg }}
+        </v-alert>
+
+        <OrderList v-if="orders.length > 0" :orders="orders" />
+        <EmptyState v-else :loading="loading" />
+      </main>
+
+      <footer
+        class="shrink-0 border-t border-black/10 px-3 py-2 text-center text-[11px] text-medium-emphasis"
+      >
         订单数据仅在本地处理，不会上传
-      </div>
-    </v-container>
+      </footer>
+    </div>
   </v-app>
 </template>
-
-<style scoped>
-.order-card:hover {
-  border-color: rgb(var(--v-theme-primary));
-}
-</style>

@@ -53,8 +53,14 @@ pnpm compile
 entrypoints/
   background.ts        # 后台消息路由中枢
   content.ts           # 京东域内运行的 content script
-  popup/               # 浏览器弹窗 UI
-    App.vue
+  popup/               # 浏览器弹窗 UI（固定 380 × 560）
+    App.vue            # 只做状态编排与整体布局
+    components/        # 展示型子组件
+      PopupHeader.vue
+      LoginAlert.vue
+      OrderList.vue
+      OrderCard.vue
+      EmptyState.vue
     main.ts
     index.html
     style.css

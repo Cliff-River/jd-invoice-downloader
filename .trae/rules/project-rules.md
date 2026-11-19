@@ -16,6 +16,8 @@ entrypoints/
   background.ts        # 后台脚本（消息路由中枢，只放协调逻辑）
   content.ts           # 京东域内运行的 content script（DOM 解析入口）
   popup/               # 浏览器弹窗 UI（Vue 3 单文件组件）
+    App.vue            # 只做状态编排与布局
+    components/        # 展示型子组件（PopupHeader / LoginAlert / OrderList / OrderCard / EmptyState）
 src/
   types/               # 共享类型定义（OrderInfo、MessagePayload、ErrorCode）
   services/            # 纯逻辑服务（jd-parser.ts：京东 DOM 解析）
@@ -31,6 +33,15 @@ public/icon/           # 扩展图标
 - 类型/接口：PascalCase（`OrderInfo`、`MessagePayload`）
 - 常量枚举：`ERROR_CODES`（全大写下划线）
 - Vue 组件：PascalCase 单文件组件
+
+## Popup UI 约定
+
+- **尺寸固定**：`entrypoints/popup/style.css` 中 `html / body / #app` 固定为 `380px × 560px`，超出内容只允许在 `main` 内部滚动，不得把 Popup 撑大
+- **组件分工**：`App.vue` 只负责状态（登录态 / 采集 / 错误）与布局；展示型子组件放在 `entrypoints/popup/components/`，通过 `props` / `emits` 通信
+- **消息收发集中**：`browser.runtime.sendMessage` 只出现在 `App.vue`，子组件不直接调用
+- **样式分工**：结构用 Vuetify 组件，间距/排版用 TailwindCSS 工具类；Vuetify 的 `pa-*`、`mb-*`、`d-flex` 与 Tailwind 工具类二选一，同一组件内保持一致
+- **图标**：项目未引入图标字体，`v-icon` 的 `mdi-*` 不会渲染；需要图标时使用内联 SVG（参考 `PopupHeader.vue`）
+- 调整组件属性前先查 Vuetify MCP（`get_component_api_by_version`），不要凭记忆写 API
 
 ## 消息通信约定
 
