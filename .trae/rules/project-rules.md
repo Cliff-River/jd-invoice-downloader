@@ -1,4 +1,4 @@
-# JD Invoice Downloader - 项目规则
+# JD Orders Collector - 项目规则
 
 本文件定义在本仓库中工作时必须遵守的约定。新增代码前请先阅读。
 

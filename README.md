@@ -1,4 +1,4 @@
-# JD Orders Helper
+# JD Orders Collector
 
 一个基于 WXT + Vue 3 的 Chrome/Firefox 浏览器扩展，帮助你一键采集京东近一个月的订单信息。
 

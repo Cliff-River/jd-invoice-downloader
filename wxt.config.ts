@@ -6,7 +6,7 @@ import ViteFonts from 'unplugin-fonts/vite'
 export default defineConfig({
   modules: ["@wxt-dev/module-vue"],
   manifest: {
-    name: "JD orders helper",
+    name: "JD Orders Collector",
     description: "A Chrome extension to help you manage your JD orders.",
     version: "1.0.0",
     host_permissions: ["*://*.jd.com/*"],

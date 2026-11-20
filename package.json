@@ -1,6 +1,6 @@
 {
-  "name": "jd-invoice-downloader",
-  "description": "京东订单助手 - 一键收集京东近一个月订单信息的浏览器扩展",
+  "name": "jd-orders-collector",
+  "description": "JD Orders Collector - 一键收集京东近一个月订单信息的浏览器扩展",
   "private": true,
   "version": "0.0.0",
   "type": "module",
