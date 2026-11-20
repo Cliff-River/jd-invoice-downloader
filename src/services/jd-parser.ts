@@ -74,6 +74,15 @@ function pickAmount(card: Element): string {
 }
 
 /**
+ * 判断金额是否为 0
+ * 解析不出金额的（空串、`-` 等）视为未知，保留不删
+ */
+function isZeroAmount(amount: string): boolean {
+  const n = Number.parseFloat(amount.replace(/[^\d.]/g, ''));
+  return !isNaN(n) && n === 0;
+}
+
+/**
  * 从当前订单页 document 中解析订单列表
  * @param doc - 当前页面的 document 对象（content script 上下文直接传 document）
  * @param days - 只保留近 days 天内的订单，默认 30
@@ -115,7 +124,7 @@ export function parseOrders(doc: Document, days = 30): OrderInfo[] {
     }
   });
 
-  if (orders.length > 0) return orders;
+  if (orders.length > 0) return orders.filter((o) => !isZeroAmount(o.amount));
 
   // 策略 2（兜底）: 旧版表格行 .order-item / .order-tb
   const rows = doc.querySelectorAll('.order-item, .order-tb, .tb-tbody .order-row, [class*="order-item"]');
@@ -210,7 +219,7 @@ export function parseOrders(doc: Document, days = 30): OrderInfo[] {
     });
   }
 
-  return orders;
+  return orders.filter((o) => !isZeroAmount(o.amount));
 }
 
 /** 检测当前页面是否被重定向到登录页（说明登录失效） */
